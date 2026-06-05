@@ -3,6 +3,43 @@
   "version": "0.1.0",
   "description": "A tiny coding agent meant for the cloud.",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./core": {
+      "types": "./dist/src/core/index.d.ts",
+      "import": "./dist/src/core/index.js"
+    },
+    "./models": {
+      "types": "./dist/src/models/index.d.ts",
+      "import": "./dist/src/models/index.js"
+    },
+    "./environments": {
+      "types": "./dist/src/environments/index.d.ts",
+      "import": "./dist/src/environments/index.js"
+    },
+    "./events": {
+      "types": "./dist/src/runs/events.d.ts",
+      "import": "./dist/src/runs/events.js"
+    },
+    "./runs": {
+      "types": "./dist/src/runs/index.d.ts",
+      "import": "./dist/src/runs/index.js"
+    },
+    "./auth/github-copilot": {
+      "types": "./dist/src/auth/github-copilot.d.ts",
+      "import": "./dist/src/auth/github-copilot.js"
+    },
+    "./testing": {
+      "types": "./dist/src/testing/index.d.ts",
+      "import": "./dist/src/testing/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "packageManager": "pnpm@11.5.0",
   "bin": {
     "alto": "./dist/src/cli/index.js"

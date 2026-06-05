@@ -4,57 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import {
-  AltoAgent,
-  FileCredentialStore,
-  FormatError,
-  LocalEnvironment,
-  OpenAIModel,
-  Submitted,
-  WorkspaceEnvironment,
-  cleanWorkspaces,
-  getRunPaths,
-  listWorkspaces,
-  defaultWorkspaceRoot,
-  formatOutput,
-  getGitHubCopilotBaseUrl,
-  listRuns,
-  readRunMetadata,
-  writeRunMetadata,
-} from "../src/index.js";
-import type { AgentEvent, ExecutionOutput, Message, Model } from "../src/index.js";
-
-class DeterministicModel implements Model {
-  calls = 0;
-
-  async query(): Promise<Message> {
-    this.calls += 1;
-    return {
-      role: "assistant",
-      content: "Submitting.",
-      extra: {
-        actions: [{ command: "printf 'COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\\nall done\\n'" }],
-        cost: 0,
-      },
-    };
-  }
-
-  formatMessage(message: Message): Message {
-    return message;
-  }
-
-  formatObservationMessages(_message: Message, outputs: ExecutionOutput[]): Message[] {
-    return outputs.map((out) => ({ role: "user", content: out.output, extra: { ...out } }));
-  }
-
-  getTemplateVars(): Record<string, unknown> {
-    return { model_name: "deterministic" };
-  }
-
-  serialize(): Record<string, unknown> {
-    return { info: { config: { model_type: "DeterministicModel" } } };
-  }
-}
+import { runAlto } from "../src/index.js";
+import { AltoAgent, FormatError, Submitted, type Message } from "../src/core/index.js";
+import { LocalEnvironment, WorkspaceEnvironment, cleanWorkspaces, listWorkspaces } from "../src/environments/index.js";
+import { OpenAIModel } from "../src/models/index.js";
+import { getRunPaths, listRuns, readRunMetadata, writeRunMetadata } from "../src/runs/index.js";
+import type { AgentEvent } from "../src/runs/index.js";
+import { getGitHubCopilotBaseUrl } from "../src/auth/github-copilot.js";
+import { DeterministicModel, InMemoryEventSink } from "../src/testing/index.js";
+import { FileCredentialStore } from "../src/auth/credential-store.js";
+import { formatOutput } from "../src/models/openai.js";
+import { defaultWorkspaceRoot } from "../src/utils/paths.js";
 
 test("LocalEnvironment raises Submitted on completion sentinel", async () => {
   const env = new LocalEnvironment();
@@ -107,6 +67,29 @@ test("AltoAgent accepts run requests and emits lifecycle events", async () => {
   assert.ok(events.some((event) => event.type === "model_call_started"));
   assert.ok(events.some((event) => event.type === "action_started"));
   assert.ok(events.some((event) => event.type === "run_finished"));
+});
+
+test("runAlto provides a curated root SDK facade", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "alto-sdk-"));
+  const events = new InMemoryEventSink();
+
+  try {
+    const result = await runAlto({
+      task: "finish immediately",
+      model: new DeterministicModel(),
+      workspace: false,
+      output: { runsRoot: dir },
+      events: { sink: events },
+    });
+
+    assert.equal(result.status, "submitted");
+    assert.equal(result.submission, "all done\n");
+    assert.equal(result.metadata.status, "succeeded");
+    assert.ok(result.transcriptPath.startsWith(dir));
+    assert.ok(events.events.some((event) => event.type === "run_finished"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("LocalEnvironment does not forward arbitrary process env to commands", async () => {

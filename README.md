@@ -116,23 +116,53 @@ Shell commands inherit only a small safe set of host variables such as `PATH`, `
 
 ## Library use
 
-The CLI is a thin terminal adapter over the headless `AltoAgent` core. Library callers can construct an `AltoAgent` with a model, environment, event sink, and transcript store, then pass an `AgentRunRequest` containing a task, context, setup command, verification command, and workspace settings.
+The root `alto` import is the stable public SDK. It exposes a small facade for running Alto without manually wiring a model, environment, transcript store, and event sinks.
 
-Source layout:
+```ts
+import { runAlto } from "alto";
 
-```text
-src/
-  core/          AltoAgent, config, errors, request/result types
-  models/        OpenAI-compatible and GitHub Copilot model adapters
-  environments/  local shell execution and ephemeral workspace handling
-  runs/          run metadata, lifecycle events, transcript storage
-  auth/          credential storage and GitHub Copilot auth
-  cli/           command wiring, terminal agent, run execution adapter
-  service/       HTTP service wrapper
-  utils/         paths, env-file parsing, generic helpers
+const result = await runAlto({
+  task: "Fix the failing tests",
+  workspace: { sourcePath: "/path/to/repo", preserve: true },
+  model: { provider: "github-copilot", name: "gpt-5.4" },
+  limits: { stepLimit: 20 },
+  events: {
+    onEvent(event) {
+      console.log(event.type);
+    },
+  },
+});
+
+console.log(result.status, result.submission);
 ```
 
-The service-facing `AgentRunRequest` shape is:
+For repeated use, create an SDK client with defaults:
+
+```ts
+import { Alto } from "alto";
+
+const alto = new Alto({
+  model: { provider: "openai", name: "gpt-5.4-mini" },
+  workspace: { root: "/tmp/alto-workspaces" },
+});
+
+await alto.run({ task: "Implement feature X", workspace: { sourcePath: "/path/to/repo" } });
+```
+
+The supported package entrypoints are:
+
+```text
+alto                       runAlto, createAgent, Alto, SDK request/result/event types
+alto/core                  AltoAgent, config, errors, model/environment contracts
+alto/models                OpenAIModel and GitHubCopilotModel adapters
+alto/environments          LocalEnvironment and WorkspaceEnvironment
+alto/events                EventSink implementations
+alto/runs                  run metadata and transcript helpers
+alto/auth/github-copilot   GitHub Copilot login/logout/token/status helpers
+alto/testing               deterministic model and in-memory event sink test helpers
+```
+
+The SDK `AltoRunRequest` shape is:
 
 ```ts
 {
@@ -151,14 +181,33 @@ The service-facing `AgentRunRequest` shape is:
     wallTimeLimitSeconds?: number;
     timeoutMs?: number;
   };
-  environment?: {
-    agentEnvFile?: string;
-    agentEnv?: string[];
-  };
   workspace?: {
     sourcePath?: string;
     root?: string;
     preserve?: boolean;
+  } | false;
+  environment?: {
+    cwd?: string;
+    env?: Record<string, string>;
+    agentEnvFile?: string;
+    agentEnv?: string[] | string;
+    inheritEnv?: string[];
+    timeoutMs?: number;
+  };
+  output?: {
+    runId?: string;
+    runsRoot?: string;
+    transcriptPath?: string;
+    eventsPath?: string;
+    writeEvents?: boolean;
+  };
+  events?: {
+    onEvent?: (event: AltoEvent) => void | Promise<void>;
+    sink?: EventSink;
+    sinks?: EventSink[];
+    console?: boolean;
   };
 }
 ```
+
+Advanced callers can import `AltoAgent`, `Model`, and `Environment` from `alto/core` and construct their own runtime. CLI and service adapters are intentionally not part of the root SDK surface.
