@@ -1,0 +1,48 @@
+{
+  "name": "cirro",
+  "version": "0.1.0",
+  "description": "A self-hostable remote service for running Alto coding-agent jobs.",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "cirro": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/src/cli.js serve",
+    "test": "pnpm --filter alto build && node --import tsx --test test/**/*.test.ts"
+  },
+  "keywords": [
+    "agent",
+    "alto",
+    "coding-agent",
+    "self-hosted"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "alto": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

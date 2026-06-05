@@ -6,7 +6,6 @@ import { stdin as input, stdout as output } from "node:process";
 import { deleteGitHubCopilotCredentials, getGitHubAuthStatus, loginWithGitHubCopilot } from "../auth/github.js";
 import { listRuns } from "../runs/metadata.js";
 import { cleanWorkspaces, listWorkspaces } from "../environments/workspace.js";
-import { startServer, type ServeOptions } from "../service/server.js";
 import { buildCliRunRequest, executeRun, type CliOptions } from "./run.js";
 
 const program = new Command();
@@ -107,21 +106,6 @@ program
       return;
     }
     throw new Error(`Unknown runs action '${action}'. Expected 'list' or 'show'.`);
-  });
-
-program
-  .command("serve")
-  .description("Start a minimal Alto HTTP service")
-  .option("--host <host>", "Host to bind", "127.0.0.1")
-  .option("--port <port>", "Port to bind", "3977")
-  .option("--provider <provider>", "Default model provider: github-copilot or openai", process.env.ALTO_PROVIDER ?? "github-copilot")
-  .option("-m, --model <model>", "Default model name")
-  .option("--workspace-root <path>", "Directory where temporary Alto workspaces are created")
-  .option("--agent-env-file <path>", "Agent-scoped env file", ".env.alto.agent")
-  .option("--agent-env <keys>", "Comma-separated env keys from --agent-env-file to expose to shell commands")
-  .option("--timeout <ms>", "Shell command timeout in milliseconds", "30000")
-  .action(async (options: ServeOptions) => {
-    await startServer(options);
   });
 
 async function handleAuthAction(

@@ -1,0 +1,118 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import { DeterministicModel } from "alto/testing";
+import {
+  CirroService,
+  CirroWorker,
+  FileRunStore,
+  InMemoryRunQueue,
+  loadCirroConfig,
+  submissionFromGitHubIssueComment,
+} from "../src/index.js";
+import type { CirroConfig } from "../src/index.js";
+
+test("loadCirroConfig parses service defaults from env", () => {
+  const config = loadCirroConfig({
+    CIRRO_DATA_DIR: "/tmp/cirro-test",
+    CIRRO_PORT: "4000",
+    CIRRO_WORKER_CONCURRENCY: "2",
+    CIRRO_ALLOWED_GIT_HOSTS: "github.com,example.com",
+  });
+
+  assert.equal(config.port, 4000);
+  assert.equal(config.workerConcurrency, 2);
+  assert.deepEqual(config.allowedGitHosts, ["github.com", "example.com"]);
+});
+
+test("CirroService queues a run and CirroWorker executes it with Alto", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cirro-"));
+  const config = testConfig(dir);
+  const store = new FileRunStore(dir);
+  const queue = new InMemoryRunQueue();
+  const service = new CirroService({ config, store, queue });
+  const worker = new CirroWorker({
+    config,
+    store,
+    queue,
+    altoDefaults: {
+      model: new DeterministicModel(),
+      workspace: false,
+    },
+  });
+
+  try {
+    worker.start();
+    const submitted = await service.submitRun({ task: "finish immediately", workspace: false });
+    const finished = await waitForRun(store, submitted.runId);
+
+    assert.equal(submitted.status, "queued");
+    assert.equal(finished.status, "succeeded");
+    assert.equal(finished.result?.status, "submitted");
+    assert.equal(typeof (await store.readTranscript(submitted.runId)), "string");
+    assert.ok((await store.readEvents(submitted.runId)).some((event) => event.type === "run_finished"));
+  } finally {
+    await worker.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("CirroService cancels a queued run", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cirro-"));
+  const config = testConfig(dir);
+  const store = new FileRunStore(dir);
+  const queue = new InMemoryRunQueue();
+  const service = new CirroService({ config, store, queue });
+
+  try {
+    const submitted = await service.submitRun({ task: "later", workspace: false });
+    const cancelled = await service.cancelRun(submitted.runId);
+
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal(queue.size(), 0);
+  } finally {
+    queue.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("GitHub issue-comment trigger normalizes slash commands into run submissions", () => {
+  const submission = submissionFromGitHubIssueComment({
+    comment: {
+      body: "/alto fix the tests",
+      html_url: "https://github.com/acme/repo/issues/1#issuecomment-1",
+      user: { login: "octocat" },
+    },
+    repository: {
+      full_name: "acme/repo",
+      clone_url: "https://github.com/acme/repo.git",
+    },
+  });
+
+  assert.equal(submission?.request.task, "fix the tests");
+  assert.equal(submission?.request.source?.type, "git");
+  assert.equal(submission?.trigger.actor, "octocat");
+});
+
+function testConfig(dataDir: string): CirroConfig {
+  return {
+    ...loadCirroConfig({ CIRRO_DATA_DIR: dataDir }),
+    defaultStepLimit: 10,
+    defaultTimeoutMs: 30_000,
+  };
+}
+
+async function waitForRun(store: FileRunStore, runId: string) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 5000) {
+    const run = await store.getRun(runId);
+    if (run && (run.status === "succeeded" || run.status === "failed" || run.status === "cancelled" || run.status === "timed_out")) {
+      return run;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("Timed out waiting for run.");
+}
