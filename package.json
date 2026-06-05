@@ -1,0 +1,38 @@
+{
+  "name": "alto",
+  "version": "0.1.0",
+  "description": "A tiny coding agent meant for the cloud.",
+  "type": "module",
+  "packageManager": "pnpm@11.5.0",
+  "bin": {
+    "alto": "./dist/src/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "test": "node --import tsx --test test/**/*.test.ts"
+  },
+  "keywords": [
+    "agent",
+    "coding-agent",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.7",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

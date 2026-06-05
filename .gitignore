@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.env
+.env.alto.agent
+*.traj.json
+.DS_Store
