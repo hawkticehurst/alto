@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { Readable } from "node:stream";
 
 import { isTerminalRunStatus, type CirroRunRequest } from "../api/types.js";
 import type { CirroConfig } from "../config/index.js";
@@ -12,160 +13,172 @@ export interface CirroHttpServerOptions {
   store: RunStore;
 }
 
+export type CirroFetchHandler = (request: Request) => Promise<Response>;
+
+export interface CirroApp {
+  fetch: CirroFetchHandler;
+}
+
+export function createCirroApp(options: CirroHttpServerOptions): CirroApp {
+  return {
+    fetch: (request) => routeRequest(request, options),
+  };
+}
+
 export function createCirroHttpServer(options: CirroHttpServerOptions): Server {
+  const app = createCirroApp(options);
   return createServer(async (request, response) => {
     try {
-      await routeRequest(request, response, options);
+      await writeNodeResponse(response, await app.fetch(toWebRequest(request, response)));
     } catch (error) {
-      writeJson(response, response.headersSent ? 500 : statusForError(error), {
+      await writeNodeResponse(response, jsonResponse(statusForError(error), {
         error: error instanceof Error ? error.message : String(error),
-      });
+      }));
     }
   });
 }
 
-async function routeRequest(request: IncomingMessage, response: ServerResponse, options: CirroHttpServerOptions): Promise<void> {
-  const url = new URL(request.url ?? "/", "http://cirro.local");
+async function routeRequest(request: Request, options: CirroHttpServerOptions): Promise<Response> {
+  const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
 
   if (request.method === "GET" && url.pathname === "/health") {
-    writeJson(response, 200, { ok: true });
-    return;
+    return jsonResponse(200, { ok: true });
   }
 
   if (request.method === "POST" && url.pathname === "/runs") {
-    if (!authorizeRequest(request, response, options.config, "write")) {
-      return;
+    const unauthorized = authorizeRequest(request, options.config, "write");
+    if (unauthorized) {
+      return unauthorized;
     }
     const body = (await readJsonBody(request)) as CirroRunRequest;
     const submitted = await options.service.submitRun(body, { type: "manual" });
-    writeJson(response, 202, submitted);
-    return;
+    return jsonResponse(202, submitted);
   }
 
   if (request.method === "GET" && url.pathname === "/runs") {
-    if (!authorizeRequest(request, response, options.config, "read")) {
-      return;
+    const unauthorized = authorizeRequest(request, options.config, "read");
+    if (unauthorized) {
+      return unauthorized;
     }
     const limit = Number(url.searchParams.get("limit") ?? 50);
-    writeJson(response, 200, { runs: await options.service.listRuns(Number.isFinite(limit) ? limit : 50) });
-    return;
+    return jsonResponse(200, { runs: await options.service.listRuns(Number.isFinite(limit) ? limit : 50) });
   }
 
   if (parts[0] !== "runs" || !parts[1]) {
-    writeJson(response, 404, { error: "Not found" });
-    return;
+    return jsonResponse(404, { error: "Not found" });
   }
 
   const runId = parts[1];
 
   if (request.method === "GET" && parts.length === 2) {
-    if (!authorizeRequest(request, response, options.config, "read")) {
-      return;
+    const unauthorized = authorizeRequest(request, options.config, "read");
+    if (unauthorized) {
+      return unauthorized;
     }
     const run = await options.service.getRun(runId);
     if (!run) {
-      writeJson(response, 404, { error: "Run not found" });
-      return;
+      return jsonResponse(404, { error: "Run not found" });
     }
-    writeJson(response, 200, run);
-    return;
+    return jsonResponse(200, run);
   }
 
   if (request.method === "POST" && parts[2] === "cancel") {
-    if (!authorizeRequest(request, response, options.config, "write")) {
-      return;
+    const unauthorized = authorizeRequest(request, options.config, "write");
+    if (unauthorized) {
+      return unauthorized;
     }
-    writeJson(response, 200, await options.service.cancelRun(runId));
-    return;
+    return jsonResponse(200, await options.service.cancelRun(runId));
   }
 
   if (request.method === "GET" && parts[2] === "events") {
-    if (!authorizeRequest(request, response, options.config, "read")) {
-      return;
+    const unauthorized = authorizeRequest(request, options.config, "read");
+    if (unauthorized) {
+      return unauthorized;
     }
-    if (url.searchParams.get("stream") === "true" || request.headers.accept?.includes("text/event-stream")) {
-      await streamEvents(response, runId, options);
-      return;
+    if (url.searchParams.get("stream") === "true" || request.headers.get("accept")?.includes("text/event-stream")) {
+      return streamEvents(request.signal, runId, options);
     }
-    writeJson(response, 200, { events: await options.store.readEvents(runId) });
-    return;
+    return jsonResponse(200, { events: await options.store.readEvents(runId) });
   }
 
   if (request.method === "GET" && parts[2] === "transcript") {
-    if (!authorizeRequest(request, response, options.config, "read")) {
-      return;
+    const unauthorized = authorizeRequest(request, options.config, "read");
+    if (unauthorized) {
+      return unauthorized;
     }
     const transcript = await options.store.readTranscript(runId);
     if (!transcript) {
-      writeJson(response, 404, { error: "Transcript not found" });
-      return;
+      return jsonResponse(404, { error: "Transcript not found" });
     }
-    response.writeHead(200, { "Content-Type": "application/json" });
-    response.end(transcript);
-    return;
+    return new Response(transcript, { headers: { "Content-Type": "application/json" } });
   }
 
-  writeJson(response, 404, { error: "Not found" });
+  return jsonResponse(404, { error: "Not found" });
 }
 
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  if (response.headersSent) {
-    response.end();
-    return;
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(`${JSON.stringify(body, null, 2)}\n`, {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader !== null && Number(contentLengthHeader) > 1_000_000) {
+    throw new HttpError(413, "Request body is too large.");
   }
-  response.writeHead(statusCode, { "Content-Type": "application/json" });
-  response.end(`${JSON.stringify(body, null, 2)}\n`);
+  const body = await request.text();
+  if (body.length > 1_000_000) {
+    throw new HttpError(413, "Request body is too large.");
+  }
+  try {
+    return JSON.parse(body || "{}") as unknown;
+  } catch {
+    throw new HttpError(400, "Request body must be valid JSON.");
+  }
 }
 
-function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk: string) => {
-      body += chunk;
-      if (body.length > 1_000_000) {
-        reject(new Error("Request body is too large."));
-        request.destroy();
-      }
-    });
-    request.on("end", () => {
+function streamEvents(signal: AbortSignal, runId: string, options: CirroHttpServerOptions): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let sent = 0;
       try {
-        resolve(JSON.parse(body || "{}") as unknown);
+        while (!signal.aborted) {
+          const events = await options.store.readEvents(runId);
+          for (const event of events.slice(sent)) {
+            controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
+          }
+          sent = events.length;
+
+          const run = await options.service.getRun(runId);
+          if (!run || isTerminalRunStatus(run.status)) {
+            controller.enqueue(encoder.encode(`event: run_status\ndata: ${JSON.stringify({ runId, status: run?.status ?? "missing" })}\n\n`));
+            break;
+          }
+          await sleep(1000);
+        }
+        controller.close();
       } catch (error) {
-        reject(error);
+        controller.error(error);
       }
-    });
-    request.on("error", reject);
+    },
   });
-}
-
-async function streamEvents(response: ServerResponse, runId: string, options: CirroHttpServerOptions): Promise<void> {
-  response.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
   });
-
-  let sent = 0;
-  while (!response.closed) {
-    const events = await options.store.readEvents(runId);
-    for (const event of events.slice(sent)) {
-      response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-    }
-    sent = events.length;
-
-    const run = await options.service.getRun(runId);
-    if (!run || isTerminalRunStatus(run.status)) {
-      response.write(`event: run_status\ndata: ${JSON.stringify({ runId, status: run?.status ?? "missing" })}\n\n`);
-      response.end();
-      return;
-    }
-    await sleep(1000);
-  }
 }
 
 function statusForError(error: unknown): number {
+  if (error instanceof HttpError) {
+    return error.status;
+  }
   if (!(error instanceof Error)) {
     return 500;
   }
@@ -176,6 +189,55 @@ function statusForError(error: unknown): number {
     return 400;
   }
   return 500;
+}
+
+function toWebRequest(request: IncomingMessage, response: ServerResponse): Request {
+  const controller = new AbortController();
+  response.once("close", () => controller.abort());
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        headers.append(name, item);
+      }
+    } else if (value !== undefined) {
+      headers.set(name, value);
+    }
+  }
+  const method = request.method ?? "GET";
+  const init: RequestInit = {
+    method,
+    headers,
+    body: method === "GET" || method === "HEAD" ? undefined : Readable.toWeb(request) as unknown as ReadableStream,
+    signal: controller.signal,
+  };
+  return new Request(
+    new URL(request.url ?? "/", `http://${request.headers.host ?? "cirro.local"}`),
+    { ...init, duplex: "half" } as RequestInit & { duplex: "half" },
+  );
+}
+
+async function writeNodeResponse(response: ServerResponse, result: Response): Promise<void> {
+  if (response.headersSent) {
+    return;
+  }
+  response.writeHead(result.status, Object.fromEntries(result.headers.entries()));
+  if (!result.body) {
+    response.end();
+    return;
+  }
+  for await (const chunk of Readable.fromWeb(result.body as unknown as import("node:stream/web").ReadableStream)) {
+    if (!response.write(chunk)) {
+      await new Promise<void>((resolve) => response.once("drain", resolve));
+    }
+  }
+  response.end();
+}
+
+class HttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
 }
 
 function sleep(ms: number): Promise<void> {

@@ -10,7 +10,7 @@ export type {
 export { isTerminalRunStatus } from "./api/types.js";
 export { loadCirroConfig, type CirroConfig } from "./config/index.js";
 export { InMemoryRunQueue, type RunQueue } from "./queue/in-memory.js";
-export { createCirroHttpServer } from "./server/http.js";
+export { createCirroApp, createCirroHttpServer, type CirroApp, type CirroFetchHandler, type CirroHttpServerOptions } from "./server/http.js";
 export { startCirroServer, type StartedCirroServer, type StartCirroOptions } from "./server/index.js";
 export { CirroService, type CirroServiceOptions } from "./service.js";
 export { FileRunStore, normalizeStatusForResult, type CirroRunPaths, type RunStore } from "./store/file-store.js";
