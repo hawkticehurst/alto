@@ -11,7 +11,6 @@ import {
   FileRunStore,
   InMemoryRunQueue,
   loadCirroConfig,
-  submissionFromGitHubIssueComment,
 } from "../src/index.js";
 import type { CirroConfig } from "../src/index.js";
 
@@ -77,24 +76,6 @@ test("CirroService cancels a queued run", async () => {
     queue.close();
     await rm(dir, { recursive: true, force: true });
   }
-});
-
-test("GitHub issue-comment trigger normalizes slash commands into run submissions", () => {
-  const submission = submissionFromGitHubIssueComment({
-    comment: {
-      body: "/alto fix the tests",
-      html_url: "https://github.com/acme/repo/issues/1#issuecomment-1",
-      user: { login: "octocat" },
-    },
-    repository: {
-      full_name: "acme/repo",
-      clone_url: "https://github.com/acme/repo.git",
-    },
-  });
-
-  assert.equal(submission?.request.task, "fix the tests");
-  assert.equal(submission?.request.source?.type, "git");
-  assert.equal(submission?.trigger.actor, "octocat");
 });
 
 function testConfig(dataDir: string): CirroConfig {

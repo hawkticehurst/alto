@@ -38,7 +38,7 @@ export interface CirroRunRecord {
 }
 
 export interface CirroTriggerMetadata {
-  type: "manual" | "webhook" | "cron";
+  type: "manual";
   actor?: string;
   source?: string;
   raw?: Record<string, unknown>;
