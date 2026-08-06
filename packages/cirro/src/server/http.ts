@@ -125,8 +125,8 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 async function readJsonBody(request: Request): Promise<unknown> {
-  const contentLength = Number(request.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > 1_000_000) {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader !== null && Number(contentLengthHeader) > 1_000_000) {
     throw new HttpError(413, "Request body is too large.");
   }
   const body = await request.text();
