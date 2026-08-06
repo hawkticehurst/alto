@@ -205,13 +205,16 @@ function toWebRequest(request: IncomingMessage, response: ServerResponse): Reque
     }
   }
   const method = request.method ?? "GET";
-  return new Request(new URL(request.url ?? "/", `http://${request.headers.host ?? "cirro.local"}`), {
+  const init: RequestInit = {
     method,
     headers,
     body: method === "GET" || method === "HEAD" ? undefined : Readable.toWeb(request) as unknown as ReadableStream,
-    duplex: "half",
     signal: controller.signal,
-  });
+  };
+  return new Request(
+    new URL(request.url ?? "/", `http://${request.headers.host ?? "cirro.local"}`),
+    { ...init, duplex: "half" } as RequestInit & { duplex: "half" },
+  );
 }
 
 async function writeNodeResponse(response: ServerResponse, result: Response): Promise<void> {
