@@ -10,6 +10,7 @@ import {
   CirroWorker,
   FileRunStore,
   InMemoryRunQueue,
+  createCirroApp,
   loadCirroConfig,
 } from "../src/index.js";
 import type { CirroConfig } from "../src/index.js";
@@ -72,6 +73,32 @@ test("CirroService cancels a queued run", async () => {
 
     assert.equal(cancelled.status, "cancelled");
     assert.equal(queue.size(), 0);
+  } finally {
+    queue.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Cirro app handles Web Standard Request objects", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cirro-"));
+  const config = testConfig(dir);
+  const store = new FileRunStore(dir);
+  const queue = new InMemoryRunQueue();
+  const service = new CirroService({ config, store, queue });
+  const app = createCirroApp({ config, service, store });
+
+  try {
+    const health = await app.fetch(new Request("http://cirro.local/health"));
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { ok: true });
+
+    const submitted = await app.fetch(new Request("http://cirro.local/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task: "run through a Web Request", workspace: false }),
+    }));
+    assert.equal(submitted.status, 202);
+    assert.equal((await submitted.json() as { status: string }).status, "queued");
   } finally {
     queue.close();
     await rm(dir, { recursive: true, force: true });

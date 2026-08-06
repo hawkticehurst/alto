@@ -1,23 +1,19 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-
 import type { CirroConfig } from "../config/index.js";
 
 export type AuthScope = "read" | "write";
 
-export function authorizeRequest(request: IncomingMessage, response: ServerResponse, config: CirroConfig, scope: AuthScope): boolean {
+export function authorizeRequest(request: Request, config: CirroConfig, scope: AuthScope): Response | undefined {
   const accepted = acceptedTokens(config, scope);
   if (accepted.length === 0) {
-    return true;
+    return undefined;
   }
 
   const token = readToken(request);
   if (token && accepted.includes(token)) {
-    return true;
+    return undefined;
   }
 
-  response.writeHead(401, { "Content-Type": "application/json" });
-  response.end(`${JSON.stringify({ error: "Unauthorized" })}\n`);
-  return false;
+  return jsonResponse(401, { error: "Unauthorized" });
 }
 
 function acceptedTokens(config: CirroConfig, scope: AuthScope): string[] {
@@ -27,11 +23,17 @@ function acceptedTokens(config: CirroConfig, scope: AuthScope): string[] {
   return [config.apiToken, config.readToken].filter((token): token is string => Boolean(token));
 }
 
-function readToken(request: IncomingMessage): string | undefined {
-  const authorization = request.headers.authorization;
+function readToken(request: Request): string | undefined {
+  const authorization = request.headers.get("authorization");
   if (authorization?.startsWith("Bearer ")) {
     return authorization.slice("Bearer ".length).trim();
   }
-  const header = request.headers["x-cirro-token"];
-  return Array.isArray(header) ? header[0] : header;
+  return request.headers.get("x-cirro-token") ?? undefined;
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(`${JSON.stringify(body, null, 2)}\n`, {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
