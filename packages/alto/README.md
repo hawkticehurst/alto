@@ -1,6 +1,6 @@
 # alto
 
-A WIP opinionated coding agent that puts humans back in the loop.
+An opinionated coding agent that puts humans back in the loop.
 
 ## Setup
 
