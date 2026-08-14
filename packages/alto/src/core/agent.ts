@@ -1,6 +1,6 @@
 import { defaultAgentConfig, type AgentConfig } from "./config.js";
 import { NoopEventSink, type AgentEvent, type EventSink } from "../runs/events.js";
-import { InterruptAgentFlow, LimitsExceeded, TimeExceeded } from "./errors.js";
+import { InterruptAgentFlow } from "./errors.js";
 import { FileTranscriptStore, type TranscriptStore } from "../runs/transcript-store.js";
 import type { Action, AgentRunRequest, AgentRunResult, Environment, ExecutionOutput, Message, Model } from "./types.js";
 import { asArray, recursiveMerge, renderTemplate } from "../utils/index.js";
@@ -13,9 +13,7 @@ export class AltoAgent {
   readonly transcriptStore?: TranscriptStore;
   messages: Message[] = [];
   extraTemplateVars: Record<string, unknown> = {};
-  cost = 0;
   nCalls = 0;
-  private startTime = Date.now();
 
   constructor(model: Model, env: Environment, config: Partial<AgentConfig> = {}) {
     this.model = model;
@@ -27,8 +25,6 @@ export class AltoAgent {
 
   async run(input: string | AgentRunRequest = "", templateVars: Record<string, unknown> = {}): Promise<AgentRunResult> {
     const request = this.normalizeRunRequest(input, templateVars);
-    this.startTime = Date.now();
-    this.cost = 0;
     this.nCalls = 0;
     this.messages = [];
     this.extraTemplateVars = { task: request.task, request, ...request.context, ...templateVars };
@@ -87,36 +83,10 @@ export class AltoAgent {
   }
 
   async query(): Promise<Message> {
-    if (this.config.stepLimit > 0 && this.nCalls >= this.config.stepLimit) {
-      throw new LimitsExceeded({
-        role: "exit",
-        content: "LimitsExceeded",
-        extra: { exit_status: "LimitsExceeded", submission: "" },
-      });
-    }
-
-    if (this.config.costLimit > 0 && this.cost >= this.config.costLimit) {
-      throw new LimitsExceeded({
-        role: "exit",
-        content: "LimitsExceeded",
-        extra: { exit_status: "LimitsExceeded", submission: "" },
-      });
-    }
-
-    if (this.config.wallTimeLimitSeconds > 0 && this.elapsedSeconds() >= this.config.wallTimeLimitSeconds) {
-      throw new TimeExceeded({
-        role: "exit",
-        content: "TimeExceeded",
-        extra: { exit_status: "TimeExceeded", submission: "" },
-      });
-    }
-
     const step = this.nCalls + 1;
     await this.emit({ type: "model_call_started", step });
     this.nCalls = step;
     const message = await this.model.query(this.messages);
-    const cost = message.extra?.cost;
-    this.cost += typeof cost === "number" ? cost : 0;
     this.addMessages(message);
     await this.emit({ type: "model_call_finished", step });
     return message;
@@ -143,8 +113,6 @@ export class AltoAgent {
       this.model.getTemplateVars(),
       {
         n_model_calls: this.nCalls,
-        model_cost: this.cost,
-        elapsed_seconds: this.elapsedSeconds(),
       },
       this.extraTemplateVars,
       extra,
@@ -158,7 +126,6 @@ export class AltoAgent {
       {
         info: {
           model_stats: {
-            instance_cost: this.cost,
             api_calls: this.nCalls,
           },
           config: {
@@ -221,10 +188,6 @@ export class AltoAgent {
     );
   }
 
-  private elapsedSeconds(): number {
-    return Math.floor((Date.now() - this.startTime) / 1000);
-  }
-
   private getWorkspacePath(): string | undefined {
     const workspacePath = this.getTemplateVars().workspace_cwd;
     return typeof workspacePath === "string" ? workspacePath : undefined;
@@ -239,12 +202,6 @@ export class AltoAgent {
 
   private formatInitialUserMessage(request: AgentRunRequest): string {
     const sections = [`Task: ${request.task}`];
-    if (request.setupCommand) {
-      sections.push(`Setup command: ${request.setupCommand}`);
-    }
-    if (request.verifyCommand) {
-      sections.push(`Verify command: ${request.verifyCommand}`);
-    }
     if (request.context && Object.keys(request.context).length > 0) {
       sections.push(`Context:\n${JSON.stringify(request.context, null, 2)}`);
     }

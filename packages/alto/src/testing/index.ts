@@ -11,7 +11,6 @@ export class DeterministicModel implements Model {
         content: "Submitting.",
         extra: {
           actions: [{ command: "printf 'COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\\nall done\\n'" }],
-          cost: 0,
         },
       },
     ],

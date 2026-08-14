@@ -20,14 +20,9 @@ export interface CliOptions {
   cwd?: string;
   output?: string;
   runId?: string;
-  stepLimit?: string;
-  costLimit?: string;
-  wallTimeLimitSeconds?: string;
   timeout?: string;
   baseUrl?: string;
   exitImmediately?: boolean;
-  setupCommand?: string;
-  verifyCommand?: string;
   workspace?: boolean;
   workspaceRoot?: string;
   preserveWorkspace?: boolean;
@@ -75,7 +70,6 @@ export async function executeRun(
     startedAt,
     transcriptPath,
     eventsPath: runPaths.eventsPath,
-    stepLimit: request.limits?.stepLimit ?? Number(options.stepLimit ?? 0),
   };
   await writeRunMetadata(runPaths, metadata);
 
@@ -92,9 +86,6 @@ export async function executeRun(
   const agent = new AgentClass(model, env, {
     ...(settings.interactive ? defaultInteractiveAgentConfig : defaultAgentConfig),
     outputPath: transcriptPath,
-    stepLimit: metadata.stepLimit,
-    costLimit: request.limits?.costLimit ?? Number(options.costLimit ?? 0),
-    wallTimeLimitSeconds: request.limits?.wallTimeLimitSeconds ?? Number(options.wallTimeLimitSeconds ?? 0),
     ...(settings.interactive ? { confirmExit: !options.exitImmediately } : {}),
     eventSink: new TeeEventSink(sinks),
   });
@@ -137,17 +128,12 @@ export function buildCliRunRequest(task: string, options: CliOptions): AgentRunR
   const provider = options.provider ?? "github-copilot";
   return {
     task,
-    setupCommand: options.setupCommand,
-    verifyCommand: options.verifyCommand,
     model: {
       provider,
       name: options.model,
       baseUrl: options.baseUrl,
     },
     limits: {
-      stepLimit: Number(options.stepLimit ?? 0),
-      costLimit: Number(options.costLimit ?? 0),
-      wallTimeLimitSeconds: Number(options.wallTimeLimitSeconds ?? 0),
       timeoutMs: Number(options.timeout ?? 30_000),
     },
     environment: {
@@ -204,7 +190,6 @@ function createEnvironment(options: CliOptions, agentEnv: Record<string, string>
     sourcePath: request.workspace.sourcePath ?? options.cwd ?? process.cwd(),
     workspaceRoot: request.workspace.root ?? options.workspaceRoot,
     preserveWorkspace: request.workspace.preserve ?? options.preserveWorkspace ?? false,
-    setupCommand: request.setupCommand ?? options.setupCommand,
   });
 }
 

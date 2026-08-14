@@ -63,7 +63,6 @@ export class OpenAIModel implements Model {
         actions,
         response,
         usage: response.usage,
-        cost: 0,
         timestamp: Date.now() / 1000,
       },
     };

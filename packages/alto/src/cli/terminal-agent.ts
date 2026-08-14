@@ -44,7 +44,7 @@ export class InteractiveAgent extends AltoAgent {
   override addMessages(...messages: Message[]): Message[] {
     for (const message of messages) {
       if (message.role === "assistant") {
-        console.log(`\nalto (step ${this.nCalls}, $${this.cost.toFixed(2)}):`);
+        console.log(`\nalto (step ${this.nCalls}):`);
       } else {
         console.log(`\n${String(message.role).toUpperCase()}:`);
       }

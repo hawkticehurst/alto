@@ -15,17 +15,12 @@ export interface ExecutionOutput {
 export interface AgentRunRequest {
   task: string;
   context?: Record<string, unknown>;
-  setupCommand?: string;
-  verifyCommand?: string;
   model?: {
     provider?: "github-copilot" | "openai";
     name?: string;
     baseUrl?: string;
   };
   limits?: {
-    stepLimit?: number;
-    costLimit?: number;
-    wallTimeLimitSeconds?: number;
     timeoutMs?: number;
   };
   environment?: {

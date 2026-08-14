@@ -20,7 +20,6 @@ export async function prepareAltoRunRequest(
     context: { ...defaults.context, ...request.context },
     model: mergeOption(defaults.model, request.model),
     limits: {
-      stepLimit: config.defaultStepLimit,
       timeoutMs: config.defaultTimeoutMs,
       ...defaults.limits,
       ...request.limits,

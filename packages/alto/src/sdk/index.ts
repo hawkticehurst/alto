@@ -14,7 +14,7 @@ import { loadAgentEnv, parseEnvKeyList, pickEnv } from "../utils/agent-env.js";
 
 export type AltoModelProvider = "github-copilot" | "openai";
 export type AltoEvent = AgentEvent & { timestamp: number };
-export type AltoRunStatus = "submitted" | "limit_exceeded" | "time_exceeded" | "failed" | "completed";
+export type AltoRunStatus = "submitted" | "failed" | "completed";
 
 export interface AltoModelOptions {
   provider?: AltoModelProvider;
@@ -43,9 +43,6 @@ export interface AltoEnvironmentOptions {
 }
 
 export interface AltoLimits {
-  stepLimit?: number;
-  costLimit?: number;
-  wallTimeLimitSeconds?: number;
   timeoutMs?: number;
 }
 
@@ -67,8 +64,6 @@ export interface AltoEventOptions {
 export interface AltoRunRequest {
   task: string;
   context?: Record<string, unknown>;
-  setupCommand?: string;
-  verifyCommand?: string;
   model?: AltoModelOptions | Model;
   workspace?: AltoWorkspaceOptions | false;
   environment?: AltoEnvironmentOptions | Environment;
@@ -118,7 +113,6 @@ export async function runAlto(input: AltoRunInput): Promise<AltoRunResult> {
     startedAt,
     transcriptPath: prepared.transcriptPath,
     eventsPath: prepared.eventsPath,
-    stepLimit: request.limits?.stepLimit ?? 0,
   };
   await writeRunMetadata(prepared.runPaths, metadata);
 
@@ -191,9 +185,6 @@ async function prepareAgent(options: AltoAgentOptions): Promise<PreparedAgent> {
   const config: Partial<AgentConfig> = {
     ...defaultAgentConfig,
     outputPath: transcriptPath,
-    stepLimit: options.limits?.stepLimit ?? defaultAgentConfig.stepLimit,
-    costLimit: options.limits?.costLimit ?? defaultAgentConfig.costLimit,
-    wallTimeLimitSeconds: options.limits?.wallTimeLimitSeconds ?? defaultAgentConfig.wallTimeLimitSeconds,
     eventSink,
     ...(options.systemTemplate ? { systemTemplate: options.systemTemplate } : {}),
   };
@@ -275,7 +266,6 @@ function createEnvironment(
     sourcePath: options.workspace?.sourcePath ?? envOptions.cwd ?? process.cwd(),
     workspaceRoot: options.workspace?.root,
     preserveWorkspace: options.workspace?.preserve ?? false,
-    setupCommand: options.setupCommand,
   });
 }
 
@@ -308,8 +298,6 @@ function toAgentRunRequest(request: AltoRunRequest): AgentRunRequest {
   return {
     task: request.task,
     context: request.context,
-    setupCommand: request.setupCommand,
-    verifyCommand: request.verifyCommand,
     model: isModel(request.model)
       ? undefined
       : {
@@ -390,12 +378,6 @@ function normalizeEnvKeyList(value: string[] | string | undefined): string[] {
 function normalizeRunStatus(exitStatus: unknown): AltoRunStatus {
   if (exitStatus === "Submitted") {
     return "submitted";
-  }
-  if (exitStatus === "LimitsExceeded") {
-    return "limit_exceeded";
-  }
-  if (exitStatus === "TimeExceeded") {
-    return "time_exceeded";
   }
   return "completed";
 }

@@ -108,7 +108,6 @@ test("Cirro app handles Web Standard Request objects", async () => {
 function testConfig(dataDir: string): CirroConfig {
   return {
     ...loadCirroConfig({ CIRRO_DATA_DIR: dataDir }),
-    defaultStepLimit: 10,
     defaultTimeoutMs: 30_000,
   };
 }

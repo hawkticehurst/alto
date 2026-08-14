@@ -1,6 +1,6 @@
 # alto
 
-A tiny coding agent meant for cloud-style developer environments.
+A WIP opinionated coding agent that puts humans back in the loop.
 
 ## Setup
 
@@ -41,7 +41,9 @@ or during development:
 pnpm dev -- --task "Fix the failing tests" --cwd /path/to/repo
 ```
 
-By default, Alto copies `--cwd` into an ephemeral workspace under `~/.alto/workspaces/alto-workspace-*`, runs model-proposed shell commands there, and deletes the workspace after the run. Use `--preserve-workspace` to inspect the workspace afterward, `--workspace-root <path>` to choose a different workspace parent, or `--no-workspace` to run directly in `--cwd`.
+`--cwd <path>` selects the source directory. By default, Alto copies that directory into an ephemeral workspace under `~/.alto/workspaces/alto-workspace-*`, runs model-proposed shell commands in the copy, and deletes the copy after the run. `--workspace-root <path>` changes only the parent directory where that temporary copy is created; it does not change cleanup behavior. Use `--preserve-workspace` to retain a temporary workspace for inspection.
+
+`--no-workspace` changes the execution mode: Alto runs directly in `--cwd` (or its own current directory when `--cwd` is omitted), without copying or deleting anything. This mode lets the agent modify the selected directory directly.
 
 Workspace management:
 
@@ -50,7 +52,7 @@ alto workspaces list
 alto workspaces clean
 ```
 
-The default provider is `github-copilot` and the default model is `gpt-5.4`. The default step limit is `0`, which means unlimited model calls. Set `--step-limit <number>` to cap a run.
+The default provider is `github-copilot` and the default model is `gpt-5.4`. Alto does not impose agent execution limits: it continues until the task is submitted, the run fails, or it is manually stopped. `--timeout` remains available to bound an individual shell command; it is not a run-level limit.
 
 Every run gets a generated run ID and is saved under `~/.alto/runs/<run-id>/` by default:
 
@@ -72,8 +74,7 @@ Useful options:
 ```bash
 alto --help
 alto -t "Implement feature X" --model gpt-5.4
-alto -t "Implement feature X" --setup-command "pnpm install" --verify-command "pnpm test"
-alto -t "Investigate this repo" --cwd /path/to/repo --step-limit 20 --events
+alto -t "Implement feature X" --cwd /path/to/repo --events
 ```
 
 ## Service mode
@@ -82,7 +83,7 @@ Use the `cirro` package for a self-hostable Alto service that accepts remote run
 
 ## Environment variables
 
-Alto loads `.env.alto.agent` explicitly for model/provider credentials, but does not forward those values to shell commands unless you allowlist keys with `--agent-env`.
+Alto loads `.env.alto.agent` explicitly for model/provider credentials. The agent-env file path is resolved from the directory where Alto is launched, not from `--cwd` or the temporary workspace. Its values are not forwarded to shell commands unless you allowlist keys with `--agent-env`; the flag is for controlled shell access to selected secrets, not for model authentication.
 
 ```bash
 echo "OPENAI_API_KEY=..." > .env.alto.agent
@@ -105,7 +106,6 @@ const result = await runAlto({
   task: "Fix the failing tests",
   workspace: { sourcePath: "/path/to/repo", preserve: true },
   model: { provider: "github-copilot", name: "gpt-5.4" },
-  limits: { stepLimit: 20 },
   events: {
     onEvent(event) {
       console.log(event.type);
@@ -126,7 +126,10 @@ const alto = new Alto({
   workspace: { root: "/tmp/alto-workspaces" },
 });
 
-await alto.run({ task: "Implement feature X", workspace: { sourcePath: "/path/to/repo" } });
+await alto.run({
+  task: "Implement feature X",
+  workspace: { sourcePath: "/path/to/repo" },
+});
 ```
 
 The supported package entrypoints are:
@@ -148,17 +151,12 @@ The SDK `AltoRunRequest` shape is:
 {
   task: string;
   context?: Record<string, unknown>;
-  setupCommand?: string;
-  verifyCommand?: string;
   model?: {
     provider?: "github-copilot" | "openai";
     name?: string;
     baseUrl?: string;
   };
   limits?: {
-    stepLimit?: number;
-    costLimit?: number;
-    wallTimeLimitSeconds?: number;
     timeoutMs?: number;
   };
   workspace?: {

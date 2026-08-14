@@ -5,9 +5,6 @@ import type { TranscriptStore } from "../runs/transcript-store.js";
 
 export interface AgentConfig {
   systemTemplate: string;
-  stepLimit: number;
-  costLimit: number;
-  wallTimeLimitSeconds: number;
   outputPath?: string;
   eventSink?: EventSink;
   transcriptStore?: TranscriptStore;
@@ -58,9 +55,6 @@ System: {{system}} {{release}} {{version}} {{machine}}
 
 export const defaultAgentConfig: AgentConfig = {
   systemTemplate,
-  stepLimit: 0,
-  costLimit: 0,
-  wallTimeLimitSeconds: 0,
 };
 
 export const defaultInteractiveAgentConfig: InteractiveAgentConfig = {

@@ -16,7 +16,6 @@ export interface WorkspaceEnvironmentConfig extends EnvironmentConfig {
   sourcePath?: string;
   workspaceRoot?: string;
   preserveWorkspace: boolean;
-  setupCommand?: string;
 }
 
 export class WorkspaceEnvironment extends LocalEnvironment {
@@ -29,14 +28,12 @@ export class WorkspaceEnvironment extends LocalEnvironment {
       preserveWorkspace: undefined,
       workspaceRoot: undefined,
       sourcePath: undefined,
-      setupCommand: undefined,
     } as Partial<EnvironmentConfig>);
     this.config = {
       ...this.config,
       preserveWorkspace: config.preserveWorkspace ?? false,
       workspaceRoot: config.workspaceRoot,
       sourcePath: config.sourcePath,
-      setupCommand: config.setupCommand,
     };
   }
 
@@ -63,14 +60,6 @@ export class WorkspaceEnvironment extends LocalEnvironment {
     this.workspacePath = root;
     this.config.cwd = root;
     this.config.preserveWorkspace = request.workspace?.preserve ?? this.config.preserveWorkspace;
-
-    const setupCommand = request.setupCommand ?? this.config.setupCommand;
-    if (setupCommand) {
-      const output = await super.execute({ command: setupCommand });
-      if (output.returncode !== 0) {
-        throw new Error(`Workspace setup failed with exit code ${output.returncode}:\n${output.output}`);
-      }
-    }
   }
 
   async cleanup(): Promise<void> {

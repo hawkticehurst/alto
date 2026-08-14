@@ -23,7 +23,6 @@ export interface RunMetadata {
   workspacePath?: string;
   transcriptPath: string;
   eventsPath: string;
-  stepLimit: number;
   exitStatus?: string;
   error?: string;
 }

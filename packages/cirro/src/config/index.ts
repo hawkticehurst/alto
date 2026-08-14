@@ -15,7 +15,6 @@ export interface CirroConfig {
   defaultProvider?: "github-copilot" | "openai";
   defaultModel?: string;
   defaultWorkspaceRoot: string;
-  defaultStepLimit: number;
   defaultTimeoutMs: number;
 }
 
@@ -35,7 +34,6 @@ export function loadCirroConfig(env: NodeJS.ProcessEnv = process.env): CirroConf
     defaultProvider: parseProvider(env.CIRRO_ALTO_PROVIDER),
     defaultModel: nonEmpty(env.CIRRO_ALTO_MODEL),
     defaultWorkspaceRoot: resolve(env.CIRRO_WORKSPACE_ROOT ?? join(dataDir, "workspaces")),
-    defaultStepLimit: parseInteger(env.CIRRO_DEFAULT_STEP_LIMIT, 20, "CIRRO_DEFAULT_STEP_LIMIT"),
     defaultTimeoutMs: parseInteger(env.CIRRO_DEFAULT_TIMEOUT_MS, 30_000, "CIRRO_DEFAULT_TIMEOUT_MS"),
   };
 }

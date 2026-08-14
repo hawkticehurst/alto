@@ -59,7 +59,6 @@ test("AltoAgent accepts run requests and emits lifecycle events", async () => {
   const result = await agent.run({
     task: "finish immediately",
     context: { issue: 123 },
-    verifyCommand: "pnpm test",
   });
 
   assert.equal(result.exit_status, "Submitted");
@@ -151,7 +150,6 @@ test("run metadata helpers save and list runs", async () => {
     startedAt: "2026-01-01T00:00:00.000Z",
     transcriptPath: paths.transcriptPath,
     eventsPath: paths.eventsPath,
-    stepLimit: 0,
   });
 
   assert.equal((await readRunMetadata("run-test", root))?.task, "test");

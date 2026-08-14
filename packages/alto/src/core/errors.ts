@@ -12,10 +12,6 @@ export class InterruptAgentFlow extends Error {
 
 export class Submitted extends InterruptAgentFlow {}
 
-export class LimitsExceeded extends InterruptAgentFlow {}
-
-export class TimeExceeded extends LimitsExceeded {}
-
 export class UserInterruption extends InterruptAgentFlow {}
 
 export class FormatError extends InterruptAgentFlow {}
