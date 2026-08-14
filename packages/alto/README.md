@@ -29,6 +29,24 @@ alto auth status
 alto auth logout
 ```
 
+### OpenRouter
+
+Save an [OpenRouter API key](https://openrouter.ai/keys) through the same credential store:
+
+```bash
+alto auth login --provider openrouter --api-key "$OPENROUTER_API_KEY"
+alto auth status --provider openrouter
+alto auth logout --provider openrouter
+```
+
+`alto auth login --provider openrouter` also reads `OPENROUTER_API_KEY` when `--api-key` is omitted. After saving the key, run an OpenRouter model with its OpenRouter model ID:
+
+```bash
+alto -t "Implement feature X" --provider openrouter --model openai/gpt-5.4-mini
+```
+
+The `OPENROUTER_API_KEY` environment variable takes precedence over the saved key. `OPENROUTER_MODEL` is used when `--model` is omitted.
+
 ## Run
 
 ```bash
@@ -88,6 +106,9 @@ Alto loads `.env.alto.agent` explicitly for model/provider credentials. The agen
 ```bash
 echo "OPENAI_API_KEY=..." > .env.alto.agent
 alto -t "Implement feature X" --provider openai --model gpt-4.1-mini
+
+echo "OPENROUTER_API_KEY=..." > .env.alto.agent
+alto -t "Implement feature X" --provider openrouter --model openai/gpt-5.4-mini
 
 echo "MY_SERVICE_TOKEN=..." >> .env.alto.agent
 alto -t "Use the service API" --agent-env MY_SERVICE_TOKEN
@@ -152,7 +173,7 @@ The SDK `AltoRunRequest` shape is:
   task: string;
   context?: Record<string, unknown>;
   model?: {
-    provider?: "github-copilot" | "openai";
+    provider?: "github-copilot" | "openai" | "openrouter";
     name?: string;
     baseUrl?: string;
   };

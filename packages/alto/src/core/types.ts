@@ -16,7 +16,7 @@ export interface AgentRunRequest {
   task: string;
   context?: Record<string, unknown>;
   model?: {
-    provider?: "github-copilot" | "openai";
+    provider?: "github-copilot" | "openai" | "openrouter";
     name?: string;
     baseUrl?: string;
   };

@@ -6,13 +6,15 @@ import type { AgentRunRequest, AgentRunResult, Environment, Model } from "../cor
 import { LocalEnvironment } from "../environments/local.js";
 import { WorkspaceEnvironment } from "../environments/workspace.js";
 import { getGitHubCopilotToken } from "../auth/github.js";
+import { getOpenRouterApiKey } from "../auth/openrouter.js";
 import { GitHubCopilotModel, type GitHubCopilotConfig } from "../models/github-copilot.js";
 import { OpenAIModel } from "../models/openai.js";
+import { OpenRouterModel } from "../models/openrouter.js";
 import { ConsoleEventSink, JsonLineFileEventSink, TeeEventSink, type AgentEvent, type EventSink } from "../runs/events.js";
 import { getRunPaths, writeRunMetadata, type RunMetadata, type RunPaths } from "../runs/metadata.js";
 import { loadAgentEnv, parseEnvKeyList, pickEnv } from "../utils/agent-env.js";
 
-export type AltoModelProvider = "github-copilot" | "openai";
+export type AltoModelProvider = "github-copilot" | "openai" | "openrouter";
 export type AltoEvent = AgentEvent & { timestamp: number };
 export type AltoRunStatus = "submitted" | "failed" | "completed";
 
@@ -222,6 +224,24 @@ function createModel(model: AltoModelOptions | Model | undefined, envFile: Recor
       modelKwargs: options.modelKwargs,
     };
     return { adapter: new GitHubCopilotModel(config), provider, name };
+  }
+
+  if (provider === "openrouter") {
+    const name = options.name ?? process.env.ALTO_MODEL ?? process.env.OPENROUTER_MODEL;
+    if (!name) {
+      throw new Error("No OpenRouter model set. Pass model.name or set ALTO_MODEL or OPENROUTER_MODEL.");
+    }
+    return {
+      adapter: new OpenRouterModel({
+        modelName: name,
+        apiKey: options.apiKey ?? (() => getOpenRouterApiKey({ env: envFile })),
+        baseURL: options.baseUrl ?? envFile.OPENROUTER_BASE_URL,
+        maxObservationChars: options.maxObservationChars,
+        modelKwargs: options.modelKwargs ?? {},
+      }),
+      provider,
+      name,
+    };
   }
 
   const name = options.name ?? process.env.ALTO_MODEL ?? process.env.OPENAI_MODEL;

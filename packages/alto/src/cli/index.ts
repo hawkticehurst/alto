@@ -4,6 +4,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import { deleteGitHubCopilotCredentials, getGitHubAuthStatus, loginWithGitHubCopilot } from "../auth/github.js";
+import { deleteOpenRouterApiKey, getOpenRouterAuthStatus, saveOpenRouterApiKey } from "../auth/openrouter.js";
 import { listRuns } from "../runs/metadata.js";
 import { cleanWorkspaces, listWorkspaces } from "../environments/workspace.js";
 import { buildCliRunRequest, executeRun, type CliOptions } from "./run.js";
@@ -15,7 +16,7 @@ program
   .description("A tiny coding agent meant for the cloud.")
   .option("-t, --task <task>", "Task/problem statement")
   .option("-m, --model <model>", "OpenAI-compatible model name")
-  .option("--provider <provider>", "Model provider: github-copilot or openai", process.env.ALTO_PROVIDER ?? "github-copilot")
+  .option("--provider <provider>", "Model provider: github-copilot, openai, or openrouter", process.env.ALTO_PROVIDER ?? "github-copilot")
   .option("--cwd <path>", "Source directory for the workspace")
   .option("-o, --output <path>", "Path to save the transcript JSON")
   .option("--run-id <id>", "Run ID; defaults to a generated timestamp ID")
@@ -36,17 +37,30 @@ program
 program
   .command("auth <action>")
   .description("Manage Alto authentication")
+  .option("--provider <provider>", "Authentication provider: github-copilot or openrouter", "github-copilot")
+  .option("--api-key <key>", "OpenRouter API key (avoid shell history when possible)")
   .option("--enterprise-url <url>", "GitHub Enterprise URL/domain for Copilot auth")
   .option("--no-open-browser", "Print the GitHub login URL instead of opening it")
   .action(
     async (
       action: string,
       options: {
+        provider: "github-copilot" | "openrouter";
+        apiKey?: string;
         enterpriseUrl?: string;
         openBrowser?: boolean;
       },
+      command: Command,
     ) => {
-      await handleAuthAction(action, options);
+      // Commander may consume --provider at the parent level because Alto also
+      // exposes the model-provider option. Prefer an explicitly supplied auth
+      // provider, then the parent command's value when this command used its
+      // default. This keeps `alto auth login --provider openrouter` unambiguous.
+      const provider =
+        command.getOptionValueSource("provider") === "default"
+          ? (command.parent?.opts<{ provider?: string }>().provider ?? options.provider)
+          : options.provider;
+      await handleAuthAction(action, { ...options, provider });
     },
   );
 
@@ -106,10 +120,41 @@ program
 async function handleAuthAction(
   action: string,
   options: {
+    provider: string;
+    apiKey?: string;
     enterpriseUrl?: string;
     openBrowser?: boolean;
   },
 ): Promise<void> {
+  if (options.provider !== "github-copilot" && options.provider !== "openrouter") {
+    throw new Error(`Unknown auth provider '${options.provider}'. Expected 'github-copilot' or 'openrouter'.`);
+  }
+
+  if (options.provider === "openrouter") {
+    if (action === "status") {
+      const status = await getOpenRouterAuthStatus();
+      console.log(`${status.provider}: ${status.authenticated ? "authenticated" : "not authenticated"}`);
+      return;
+    }
+
+    if (action === "logout") {
+      await deleteOpenRouterApiKey();
+      console.log("Removed OpenRouter API key.");
+      return;
+    }
+
+    if (action !== "login") {
+      throw new Error(`Unknown auth action '${action}'. Expected 'login', 'status', or 'logout'.`);
+    }
+    const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing OpenRouter API key. Pass --api-key <key> or set OPENROUTER_API_KEY.");
+    }
+    await saveOpenRouterApiKey(apiKey);
+    console.log("Saved OpenRouter API key.");
+    return;
+  }
+
   if (action === "status") {
     const status = await getGitHubAuthStatus("github-copilot");
     console.log(`${status.provider}: ${status.authenticated ? "authenticated" : "not authenticated"}`);

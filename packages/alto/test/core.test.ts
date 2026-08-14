@@ -11,6 +11,7 @@ import { OpenAIModel } from "../src/models/index.js";
 import { getRunPaths, listRuns, readRunMetadata, writeRunMetadata } from "../src/runs/index.js";
 import type { AgentEvent } from "../src/runs/index.js";
 import { getGitHubCopilotBaseUrl } from "../src/auth/github-copilot.js";
+import { deleteOpenRouterApiKey, getOpenRouterApiKey, getOpenRouterAuthStatus, saveOpenRouterApiKey } from "../src/auth/openrouter.js";
 import { DeterministicModel, InMemoryEventSink } from "../src/testing/index.js";
 import { FileCredentialStore } from "../src/auth/credential-store.js";
 import { formatOutput } from "../src/models/openai.js";
@@ -41,6 +42,21 @@ test("AltoAgent runs a linear transcript and saves it", async () => {
 
     const saved = JSON.parse(await readFile(outputPath, "utf8")) as { messages: Message[] };
     assert.equal(saved.messages.at(-1)?.role, "exit");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenRouter credentials save, report status, and respect environment overrides", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "alto-openrouter-"));
+  const store = new FileCredentialStore(join(dir, "credentials.json"));
+  try {
+    await saveOpenRouterApiKey(" saved-key ", store);
+    assert.deepEqual(await getOpenRouterAuthStatus(store), { provider: "openrouter", authenticated: true });
+    assert.equal(await getOpenRouterApiKey({ credentialStore: store }), "saved-key");
+    assert.equal(await getOpenRouterApiKey({ env: { OPENROUTER_API_KEY: "env-key" }, credentialStore: store }), "env-key");
+    await deleteOpenRouterApiKey(store);
+    assert.deepEqual(await getOpenRouterAuthStatus(store), { provider: "openrouter", authenticated: false });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

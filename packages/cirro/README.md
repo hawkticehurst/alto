@@ -57,7 +57,7 @@ curl -H 'authorization: Bearer change-me' http://127.0.0.1:3977/runs/<run-id>/tr
 | `CIRRO_ALLOW_LOCAL_SOURCES`        | `false`                      | Enable local path sources.                                                            |
 | `CIRRO_ALLOWED_LOCAL_SOURCE_ROOTS` | unset                        | Comma-separated local source roots.                                                   |
 | `CIRRO_ALLOWED_GIT_HOSTS`          | unset                        | Comma-separated allowed Git hostnames. Empty allows any HTTPS/SSH Git host.           |
-| `CIRRO_ALTO_PROVIDER`              | Alto default                 | `github-copilot` or `openai`.                                                         |
+| `CIRRO_ALTO_PROVIDER`              | Alto default                 | `github-copilot`, `openai`, or `openrouter`.                                          |
 | `CIRRO_ALTO_MODEL`                 | Alto default                 | Default Alto model.                                                                   |
 | `CIRRO_WORKSPACE_ROOT`             | `$CIRRO_DATA_DIR/workspaces` | Temporary Alto workspace root.                                                        |
 | `CIRRO_DEFAULT_TIMEOUT_MS`         | `30000`                      | Default shell command timeout.                                                        |

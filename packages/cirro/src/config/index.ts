@@ -12,7 +12,7 @@ export interface CirroConfig {
   allowLocalSources: boolean;
   allowedLocalSourceRoots: string[];
   allowedGitHosts: string[];
-  defaultProvider?: "github-copilot" | "openai";
+  defaultProvider?: "github-copilot" | "openai" | "openrouter";
   defaultModel?: string;
   defaultWorkspaceRoot: string;
   defaultTimeoutMs: number;
@@ -49,14 +49,14 @@ function parseInteger(value: string | undefined, fallback: number, name: string)
   return parsed;
 }
 
-function parseProvider(value: string | undefined): "github-copilot" | "openai" | undefined {
+function parseProvider(value: string | undefined): "github-copilot" | "openai" | "openrouter" | undefined {
   if (!value) {
     return undefined;
   }
-  if (value === "github-copilot" || value === "openai") {
+  if (value === "github-copilot" || value === "openai" || value === "openrouter") {
     return value;
   }
-  throw new Error("CIRRO_ALTO_PROVIDER must be 'github-copilot' or 'openai'.");
+  throw new Error("CIRRO_ALTO_PROVIDER must be 'github-copilot', 'openai', or 'openrouter'.");
 }
 
 function parseList(value: string | undefined): string[] {

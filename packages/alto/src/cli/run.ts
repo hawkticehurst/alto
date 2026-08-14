@@ -6,12 +6,14 @@ import { ConsoleEventSink, JsonLineFileEventSink, TeeEventSink, type AgentEvent,
 import { LocalEnvironment } from "../environments/local.js";
 import { WorkspaceEnvironment } from "../environments/workspace.js";
 import { getGitHubCopilotToken } from "../auth/github.js";
+import { getOpenRouterApiKey } from "../auth/openrouter.js";
 import { GitHubCopilotModel } from "../models/github-copilot.js";
 import { OpenAIModel } from "../models/openai.js";
+import { OpenRouterModel } from "../models/openrouter.js";
 import { getRunPaths, writeRunMetadata, type RunMetadata } from "../runs/metadata.js";
 import { InteractiveAgent } from "./terminal-agent.js";
 
-export type ModelProvider = "openai" | "github-copilot";
+export type ModelProvider = "openai" | "github-copilot" | "openrouter";
 
 export interface CliOptions {
   task?: string;
@@ -165,6 +167,14 @@ function createModel(
     });
   }
 
+  if (provider === "openrouter") {
+    return new OpenRouterModel({
+      modelName,
+      apiKey: () => getOpenRouterApiKey({ env: envFile }),
+      baseURL: request.model?.baseUrl ?? options.baseUrl ?? envFile.OPENROUTER_BASE_URL,
+    });
+  }
+
   return new OpenAIModel({
     modelName,
     apiKey: envFile.OPENAI_API_KEY,
@@ -195,8 +205,8 @@ function createEnvironment(options: CliOptions, agentEnv: Record<string, string>
 
 function resolveProvider(options: CliOptions, request: AgentRunRequest): ModelProvider {
   const provider = request.model?.provider ?? options.provider ?? "github-copilot";
-  if (provider !== "github-copilot" && provider !== "openai") {
-    throw new Error(`Unknown provider '${provider}'. Expected 'github-copilot' or 'openai'.`);
+  if (provider !== "github-copilot" && provider !== "openai" && provider !== "openrouter") {
+    throw new Error(`Unknown provider '${provider}'. Expected 'github-copilot', 'openai', or 'openrouter'.`);
   }
   return provider;
 }
@@ -206,9 +216,13 @@ function resolveModelName(options: CliOptions, request: AgentRunRequest, provide
     return request.model?.name ?? options.model ?? process.env.ALTO_MODEL ?? process.env.GITHUB_COPILOT_MODEL ?? "gpt-5.4";
   }
 
-  const modelName = request.model?.name ?? options.model ?? process.env.ALTO_MODEL ?? process.env.OPENAI_MODEL;
+  const modelName =
+    request.model?.name ??
+    options.model ??
+    process.env.ALTO_MODEL ??
+    (provider === "openrouter" ? process.env.OPENROUTER_MODEL : process.env.OPENAI_MODEL);
   if (!modelName) {
-    throw new Error("No model set. Pass --model or set ALTO_MODEL or OPENAI_MODEL.");
+    throw new Error(`No ${provider === "openrouter" ? "OpenRouter" : "OpenAI"} model set. Pass --model or set ALTO_MODEL or ${provider === "openrouter" ? "OPENROUTER_MODEL" : "OPENAI_MODEL"}.`);
   }
   return modelName;
 }

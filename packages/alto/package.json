@@ -34,6 +34,10 @@
       "types": "./dist/src/auth/github-copilot.d.ts",
       "import": "./dist/src/auth/github-copilot.js"
     },
+    "./auth/openrouter": {
+      "types": "./dist/src/auth/openrouter-api-key.d.ts",
+      "import": "./dist/src/auth/openrouter-api-key.js"
+    },
     "./testing": {
       "types": "./dist/src/testing/index.d.ts",
       "import": "./dist/src/testing/index.js"
